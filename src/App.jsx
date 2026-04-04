@@ -7,9 +7,9 @@ const IS_WEBGPU_AVAILABLE = !!navigator.gpu;
 const STICKY_SCROLL_THRESHOLD = 120;
 
 const MODELS = [
-  { id: "onnx-community/gemma-4-E2B-it-ONNX", label: "Gemma 4 E2B (q4f16 ~1.5 GB)", dtype: "q4f16" },
-  // E4B disabled: all quantizations have multi-shard data files which fail in transformers.js v4.0.1
-  // { id: "onnx-community/gemma-4-E4B-it-ONNX", label: "Gemma 4 E4B", dtype: "q4f16" },
+  { id: "onnx-community/gemma-4-E2B-it-ONNX", label: "Gemma 4 E2B — q4f16 (~1.5 GB)", dtype: "q4f16" },
+  { id: "onnx-community/gemma-4-E2B-it-ONNX", label: "Gemma 4 E2B — q4 (~1.9 GB)", dtype: "q4" },
+  { id: "onnx-community/gemma-4-E2B-it-ONNX", label: "Gemma 4 E2B — fp16 (~4.8 GB)", dtype: "fp16" },
 ];
 
 const EXAMPLES = [
@@ -29,7 +29,7 @@ function App() {
   const audioChunksRef = useRef([]);
 
   // Model
-  const [selectedModel, setSelectedModel] = useState(MODELS[0].id);
+  const [selectedModelIdx, setSelectedModelIdx] = useState(0);
   const [status, setStatus] = useState(null);
   const [error, setError] = useState(null);
   const [loadingMessage, setLoadingMessage] = useState("");
@@ -297,9 +297,19 @@ function App() {
               Text, images, camera, and audio — all on-device via WebGPU.
             </p>
 
-            {/* Model info */}
-            <div className="mt-6 px-4 py-2 rounded-xl bg-dm-surface-high/50 border border-dm-outline text-sm text-dm-text-secondary animate-subtitle-appear">
-              {MODELS[0].label}
+            {/* Model selector */}
+            <div className="mt-8 w-full max-w-[300px] animate-subtitle-appear">
+              <select
+                className="w-full px-4 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-dm-blue/50 cursor-pointer"
+                style={{ backgroundColor: "#2f3034", borderColor: "rgba(230,234,240,0.2)", color: "#f8f9fc" }}
+                value={selectedModelIdx}
+                onChange={(e) => setSelectedModelIdx(Number(e.target.value))}
+                disabled={status !== null}
+              >
+                {MODELS.map((m, i) => (
+                  <option key={i} value={i} className="bg-dm-surface-high text-dm-text">{m.label}</option>
+                ))}
+              </select>
             </div>
 
             {error && (
@@ -309,8 +319,8 @@ function App() {
             <button
               className="mt-6 rounded-full bg-dm-text px-8 py-3 text-base font-semibold text-dm-bg hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-30 disabled:cursor-not-allowed animate-button-appear"
               onClick={() => {
-                const model = MODELS.find((m) => m.id === selectedModel);
-                worker.current.postMessage({ type: "load", data: { model_id: selectedModel, dtype: model.dtype } });
+                const model = MODELS[selectedModelIdx];
+                worker.current.postMessage({ type: "load", data: { model_id: model.id, dtype: model.dtype } });
                 setStatus("loading");
               }}
               disabled={status !== null || error !== null}
