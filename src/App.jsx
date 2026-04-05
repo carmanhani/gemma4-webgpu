@@ -9,7 +9,6 @@ const STICKY_SCROLL_THRESHOLD = 120;
 const MODELS = [
   { id: "onnx-community/gemma-4-E2B-it-ONNX", label: "Gemma 4 E2B — q4f16 (~1.5 GB)", dtype: "q4f16" },
   { id: "onnx-community/gemma-4-E2B-it-ONNX", label: "Gemma 4 E2B — q4 (~1.9 GB)", dtype: "q4" },
-  { id: "onnx-community/gemma-4-E2B-it-ONNX", label: "Gemma 4 E2B — fp16 (~4.8 GB)", dtype: "fp16" },
 ];
 
 const EXAMPLES = [

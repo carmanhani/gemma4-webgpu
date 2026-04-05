@@ -32,19 +32,10 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  // Model files from huggingface — cache them persistently
-  if (url.hostname.includes("huggingface.co") || url.hostname.includes("hf.co")) {
-    event.respondWith(
-      caches.open("transformers-cache").then(async (cache) => {
-        const cached = await cache.match(event.request);
-        if (cached) return cached;
-        const response = await fetch(event.request);
-        if (response.ok) {
-          cache.put(event.request, response.clone());
-        }
-        return response;
-      })
-    );
+  // Model files from huggingface — let the library handle its own caching
+  // We skip intercepting these because large model files use range requests (HTTP 206)
+  // which the Cache API does not support
+  if (url.hostname.includes("huggingface.co") || url.hostname.includes("hf.co") || url.hostname.includes("cdn-lfs")) {
     return;
   }
 
