@@ -199,11 +199,11 @@ function App() {
     e.target.value = "";
   };
 
+  const cameraStreamRef = useRef(null);
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-      videoRef.current.srcObject = stream;
-      await videoRef.current.play();
+      cameraStreamRef.current = stream;
       setCameraActive(true);
     } catch (err) {
       console.error("Camera error:", err);
@@ -221,7 +221,8 @@ function App() {
   };
 
   const stopCamera = () => {
-    videoRef.current?.srcObject?.getTracks().forEach((t) => t.stop());
+    cameraStreamRef.current?.getTracks().forEach((t) => t.stop());
+    cameraStreamRef.current = null;
     setCameraActive(false);
   };
 
@@ -272,15 +273,15 @@ function App() {
     <div className="flex flex-col h-screen bg-dm-bg">
       {/* Hidden elements */}
       <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-      <video ref={videoRef} className={cameraActive ? "fixed z-[51] top-1/2 left-1/2 -translate-x-1/2 -translate-y-[55%] max-w-[90vw] max-h-[60vh] rounded-2xl" : "hidden"} autoPlay playsInline />
+      {/* hidden video is no longer needed — video is in the camera overlay */}
       <canvas ref={canvasRef} className="hidden" />
 
       {/* ====== LANDING ====== */}
       {status === null && messages.length === 0 && (
         <div className="h-full flex flex-col items-center relative overflow-hidden">
           {/* Background */}
-          <div className="absolute inset-0 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: "url('/background.jpg')" }} />
-          <div className="absolute inset-0 bg-dm-bg/70" />
+          <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 50% 0%, rgba(92,184,92,0.15) 0%, rgba(92,184,92,0.05) 40%, transparent 70%)" }} />
+          <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 80% 100%, rgba(92,184,92,0.08) 0%, transparent 50%)" }} />
 
           {/* Header with logo */}
           <div className="relative z-10 w-full flex justify-center py-6 border-b border-dm-outline">
@@ -289,13 +290,25 @@ function App() {
 
           <div className="relative z-10 flex flex-col items-center text-center px-6 flex-1 justify-center">
             <h1 className="text-6xl sm:text-7xl font-bold tracking-tight text-dm-text animate-title-appear animate-glow">
-              Gemma 4
+              Private AI
             </h1>
             <p className="mt-4 max-w-lg text-lg text-dm-text-secondary animate-subtitle-appear">
               Multimodal AI running privately in your browser.
               <br />
-              Text, images, camera, and audio — all on-device via WebGPU.
+              Text, images, camera, and audio.
             </p>
+            <div className="mt-3 flex items-center gap-2 text-dm-text-secondary animate-subtitle-appear">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="1" y1="1" x2="23" y2="23" />
+                <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" />
+                <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" />
+                <path d="M10.71 5.05A16 16 0 0 1 22.56 9" />
+                <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" />
+                <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+                <line x1="12" y1="20" x2="12.01" y2="20" />
+              </svg>
+              <span className="text-sm">No internet required</span>
+            </div>
 
             {/* Model selector */}
             <div className="mt-8 w-full max-w-[300px] animate-subtitle-appear">
@@ -334,7 +347,7 @@ function App() {
       {/* ====== LOADING ====== */}
       {status === "loading" && (
         <div className="h-full flex flex-col items-center justify-center gap-8 px-6 animate-fade-in-up">
-          <h2 className="text-3xl font-bold tracking-tight text-dm-text">Gemma 4 WebGPU</h2>
+          <h2 className="text-3xl font-bold tracking-tight text-dm-text">Private AI</h2>
 
           <div className="w-full max-w-[400px] space-y-1">
             <div className="text-2xl font-semibold tabular-nums text-dm-text text-center mb-4">
@@ -403,8 +416,9 @@ function App() {
       {/* ====== CAMERA OVERLAY ====== */}
       {cameraActive && (
         <div className="fixed inset-0 bg-black/90 z-50 flex flex-col items-center justify-center gap-6">
-          {/* Viewfinder corners */}
+          {/* Video + viewfinder corners */}
           <div className="relative">
+            <video ref={(el) => { videoRef.current = el; if (el && cameraStreamRef.current) { el.srcObject = cameraStreamRef.current; el.play(); } }} className="max-w-[90vw] max-h-[60vh] rounded-2xl" autoPlay playsInline />
             <div className="absolute -top-2 -left-2 w-8 h-8 border-t-2 border-l-2 border-dm-blue rounded-tl-lg animate-pulse" />
             <div className="absolute -top-2 -right-2 w-8 h-8 border-t-2 border-r-2 border-dm-blue rounded-tr-lg animate-pulse" />
             <div className="absolute -bottom-2 -left-2 w-8 h-8 border-b-2 border-l-2 border-dm-blue rounded-bl-lg animate-pulse" />

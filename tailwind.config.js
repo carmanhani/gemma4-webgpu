@@ -44,8 +44,8 @@ export default {
           "100%": { opacity: "1", transform: "translateY(0) scale(1)" },
         },
         glow: {
-          "0%": { textShadow: "0 0 20px rgba(248,249,252,0.1)" },
-          "100%": { textShadow: "0 0 80px rgba(248,249,252,0.15)" },
+          "0%": { textShadow: "0 0 20px rgba(92,184,92,0.15)" },
+          "100%": { textShadow: "0 0 80px rgba(92,184,92,0.3)" },
         },
         shimmer: {
           "0%": { backgroundPosition: "-200% 0" },
