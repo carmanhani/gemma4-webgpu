@@ -3,7 +3,7 @@ import { useEffect, useState, useRef } from "react";
 import Chat from "./components/Chat";
 import Progress from "./components/Progress";
 
-const IS_WEBGPU_AVAILABLE = !!navigator.gpu;
+// WebGPU detection is async — moved into the component
 const STICKY_SCROLL_THRESHOLD = 120;
 
 const MODELS = [
@@ -49,6 +49,50 @@ function App() {
   const [cameraActive, setCameraActive] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [attachedAudio, setAttachedAudio] = useState(null);
+
+  // WebGPU detection
+  const [gpuStatus, setGpuStatus] = useState("checking"); // "checking" | "ok" | "no-api" | "no-adapter" | "no-features"
+  const [gpuError, setGpuError] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      if (!navigator.gpu) {
+        setGpuStatus("no-api");
+        setGpuError("Seu navegador não suporta WebGPU. Use Chrome 121+ ou Edge 121+.");
+        return;
+      }
+      // Try multiple adapter options
+      const adapterOptions = [
+        { powerPreference: "high-performance" },
+        { powerPreference: "low-power" },
+        {},
+      ];
+      let adapter = null;
+      for (const opts of adapterOptions) {
+        try {
+          adapter = await navigator.gpu.requestAdapter(opts);
+          if (adapter) break;
+        } catch (_) { /* try next */ }
+      }
+      if (!adapter) {
+        setGpuStatus("no-adapter");
+        setGpuError(
+          "WebGPU está disponível mas nenhum adaptador GPU foi encontrado. " +
+          "No Android, ative a flag chrome://flags/#enable-unsafe-webgpu e reinicie o Chrome."
+        );
+        return;
+      }
+      // Verify we can actually get a device
+      try {
+        const device = await adapter.requestDevice();
+        device.destroy();
+        setGpuStatus("ok");
+      } catch (err) {
+        setGpuStatus("no-features");
+        setGpuError(`GPU encontrada mas não foi possível inicializar: ${err.message}`);
+      }
+    })();
+  }, []);
 
   function onEnter(message) {
     const userMsg = { role: "user", content: message };
@@ -257,13 +301,35 @@ function App() {
   const isReady = status === "ready";
   const canSend = isReady && !isRunning && (input.length > 0 || attachedImage || attachedAudio);
 
-  if (!IS_WEBGPU_AVAILABLE) {
+  if (gpuStatus === "checking") {
     return (
       <div className="fixed inset-0 bg-dm-bg flex items-center justify-center text-center px-6">
         <div>
+          <div className="text-4xl mb-4 animate-pulse">🔍</div>
+          <p className="text-dm-text-secondary">Verificando compatibilidade da GPU...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (gpuStatus !== "ok") {
+    return (
+      <div className="fixed inset-0 bg-dm-bg flex items-center justify-center text-center px-6">
+        <div className="max-w-md">
           <div className="text-4xl mb-4">:(</div>
-          <h1 className="text-2xl font-bold text-dm-text mb-2">WebGPU Not Supported</h1>
-          <p className="text-dm-text-secondary">Please use Chrome or Edge with WebGPU enabled.</p>
+          <h1 className="text-2xl font-bold text-dm-text mb-3">WebGPU não disponível</h1>
+          <p className="text-dm-text-secondary mb-6">{gpuError}</p>
+          {gpuStatus === "no-adapter" && (
+            <div className="text-left bg-dm-surface-high rounded-xl p-4 text-sm text-dm-text-secondary space-y-2">
+              <p className="font-semibold text-dm-text">Como ativar no Android:</p>
+              <ol className="list-decimal list-inside space-y-1">
+                <li>Abra <span className="text-dm-blue font-mono">chrome://flags</span> no Chrome</li>
+                <li>Pesquise por <span className="font-semibold text-dm-text">WebGPU</span></li>
+                <li>Ative <span className="font-semibold text-dm-text">Unsafe WebGPU</span> e <span className="font-semibold text-dm-text">WebGPU Developer Features</span></li>
+                <li>Reinicie o Chrome</li>
+              </ol>
+            </div>
+          )}
         </div>
       </div>
     );
