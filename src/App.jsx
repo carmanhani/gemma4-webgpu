@@ -54,6 +54,9 @@ function App() {
   const [gpuStatus, setGpuStatus] = useState("checking"); // "checking" | "ok" | "no-api" | "no-adapter" | "no-features"
   const [gpuError, setGpuError] = useState("");
 
+  // Cache status
+  const [modelCached, setModelCached] = useState(null); // null = checking, true/false
+
   useEffect(() => {
     (async () => {
       if (!navigator.gpu) {
@@ -93,6 +96,26 @@ function App() {
       }
     })();
   }, []);
+
+  // Check if selected model is cached
+  useEffect(() => {
+    (async () => {
+      setModelCached(null);
+      try {
+        const cacheNames = await caches.keys();
+        const modelId = MODELS[selectedModelIdx].id;
+        for (const name of cacheNames) {
+          const cache = await caches.open(name);
+          const keys = await cache.keys();
+          const hasModel = keys.some((req) => req.url.includes(modelId.replace("/", "%2F")) || req.url.includes(modelId));
+          if (hasModel) { setModelCached(true); return; }
+        }
+        setModelCached(false);
+      } catch {
+        setModelCached(false);
+      }
+    })();
+  }, [selectedModelIdx]);
 
   function onEnter(message) {
     const userMsg = { role: "user", content: message };
@@ -391,6 +414,23 @@ function App() {
               </select>
             </div>
 
+            {/* Cache status */}
+            <div className="mt-3 text-sm animate-subtitle-appear">
+              {modelCached === null ? (
+                <span className="text-dm-text-secondary">Checking cache...</span>
+              ) : modelCached ? (
+                <span className="text-dm-green flex items-center gap-1.5 justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                  Model cached — fast loading
+                </span>
+              ) : (
+                <span className="text-dm-text-secondary flex items-center gap-1.5 justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  First use — model download required
+                </span>
+              )}
+            </div>
+
             {error && (
               <div className="mt-4 text-dm-red text-sm">{error}</div>
             )}
@@ -404,7 +444,7 @@ function App() {
               }}
               disabled={status !== null || error !== null}
             >
-              Load model
+              {modelCached ? "Start" : "Download & Start"}
             </button>
           </div>
         </div>

@@ -1,0 +1,16 @@
+{
+  "name": "Private AI",
+  "short_name": "Private AI",
+  "description": "Multimodal AI running privately in your browser",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#121317",
+  "theme_color": "#121317",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
