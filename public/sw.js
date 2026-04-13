@@ -1,4 +1,4 @@
-const CACHE_NAME = "private-ai-v1";
+const CACHE_NAME = "private-ai-v2";
 
 // App shell files to cache on install
 const APP_SHELL = [
@@ -39,7 +39,22 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // App shell — cache first, fallback to network
+  // Navigation requests (HTML pages) — network first, fallback to cache
+  // This ensures users always get the latest index.html with correct asset hashes
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Static assets — cache first, fallback to network
   event.respondWith(
     caches.match(event.request).then((cached) => cached || fetch(event.request))
   );

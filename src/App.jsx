@@ -480,6 +480,25 @@ function App() {
           ref={chatContainerRef}
           className="overflow-y-auto scrollbar-thin w-full flex flex-col items-center flex-1"
         >
+          {/* Back to home */}
+          <div className="w-full flex items-center px-4 py-2 border-b border-dm-outline">
+            <button
+              className="flex items-center gap-1.5 text-sm text-dm-text-secondary hover:text-dm-text transition-colors"
+              onClick={() => {
+                worker.current.postMessage({ type: "reset" });
+                setMessages([]);
+                setStatus(null);
+                setTps(null);
+                setNumTokens(null);
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                <polyline points="9 22 9 12 15 12 15 22" />
+              </svg>
+              Início
+            </button>
+          </div>
           <Chat messages={messages} />
           {messages.length === 0 && (
             <div className="flex flex-col gap-2 mb-4">
