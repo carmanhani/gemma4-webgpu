@@ -103,10 +103,17 @@ function App() {
       try {
         const cacheNames = await caches.keys();
         const modelId = MODELS[selectedModelIdx].id;
+        // transformers.js stores blobs in Cache API — check all caches for any URL
+        // containing the model org/name (encoded or plain)
+        const encodedId = encodeURIComponent(modelId);
+        const segments = modelId.split("/"); // e.g. ["onnx-community", "gemma-4-E2B-it-ONNX"]
         for (const name of cacheNames) {
           const cache = await caches.open(name);
           const keys = await cache.keys();
-          const hasModel = keys.some((req) => req.url.includes(modelId.replace("/", "%2F")) || req.url.includes(modelId));
+          const hasModel = keys.some((req) => {
+            const url = req.url;
+            return url.includes(modelId) || url.includes(encodedId) || (segments.length === 2 && url.includes(segments[1]));
+          });
           if (hasModel) { setModelCached(true); return; }
         }
         setModelCached(false);

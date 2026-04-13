@@ -142,19 +142,28 @@ async function check() {
 }
 
 async function load({ model_id, dtype } = {}) {
-  TextGenerationPipeline.model_id = model_id || "onnx-community/gemma-4-E2B-it-ONNX";
-  TextGenerationPipeline.dtype = dtype || "q4f16";
-  self.postMessage({ status: "loading", data: `Loading ${TextGenerationPipeline.model_id} (this may take a few minutes on first visit)...` });
+  try {
+    TextGenerationPipeline.model_id = model_id || "onnx-community/gemma-4-E2B-it-ONNX";
+    TextGenerationPipeline.dtype = dtype || "q4f16";
+    self.postMessage({ status: "loading", data: `Loading ${TextGenerationPipeline.model_id} (this may take a few minutes on first visit)...` });
 
-  const [processor, model] = await TextGenerationPipeline.getInstance((x) => {
-    self.postMessage(x);
-  });
+    const [processor, model] = await TextGenerationPipeline.getInstance((x) => {
+      self.postMessage(x);
+    });
 
-  self.postMessage({ status: "loading", data: "Compiling shaders and warming up model..." });
+    self.postMessage({ status: "loading", data: "Compiling shaders and warming up model..." });
 
-  const inputs = processor.tokenizer("a");
-  await model.generate({ ...inputs, max_new_tokens: 1 });
-  self.postMessage({ status: "ready" });
+    // Warmup: use the processor to tokenize a simple text prompt
+    const warmupText = processor.tokenizer.apply_chat_template(
+      [{ role: "user", content: "hi" }],
+      { add_generation_prompt: true, tokenize: false },
+    );
+    const inputs = await processor(warmupText);
+    await model.generate({ ...inputs, max_new_tokens: 1 });
+    self.postMessage({ status: "ready" });
+  } catch (e) {
+    self.postMessage({ status: "error", data: e.toString() });
+  }
 }
 
 self.addEventListener("message", async (e) => {
