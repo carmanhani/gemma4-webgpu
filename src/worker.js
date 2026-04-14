@@ -30,106 +30,114 @@ const stopping_criteria = new InterruptableStoppingCriteria();
 let enableThinking = false;
 
 async function generate({ messages, images, audio }) {
-  const [processor, model] = await TextGenerationPipeline.getInstance();
+  try {
+    const [processor, model] = await TextGenerationPipeline.getInstance();
 
-  // Build content arrays for the chat template
-  // The processor expects messages with content arrays like:
-  // [{ type: "image" }, { type: "text", text: "..." }]
-  const formattedMessages = messages.map((msg) => {
-    if (msg.role === "user" && (msg.image || msg.audio)) {
-      const content = [];
-      if (msg.image) content.push({ type: "image" });
-      if (msg.audio) content.push({ type: "audio" });
-      content.push({ type: "text", text: msg.content || "Describe this." });
-      return { role: "user", content };
+    const formattedMessages = messages.map((msg) => {
+      if (msg.role === "user" && (msg.image || msg.audio)) {
+        const content = [];
+        if (msg.image) content.push({ type: "image" });
+        if (msg.audio) content.push({ type: "audio" });
+        content.push({ type: "text", text: msg.content || "Describe this." });
+        return { role: "user", content };
+      }
+      return msg;
+    });
+
+    const text = processor.tokenizer.apply_chat_template(formattedMessages, {
+      add_generation_prompt: true,
+      tokenize: false,
+      enable_thinking: enableThinking,
+    });
+
+    let loadedImages = null;
+    if (images && images.length > 0) {
+      loadedImages = await Promise.all(
+        images.map((img) => RawImage.fromURL(img))
+      );
     }
-    return msg;
-  });
 
-  // Apply chat template to get text with special tokens
-  const text = processor.tokenizer.apply_chat_template(formattedMessages, {
-    add_generation_prompt: true,
-    tokenize: false,
-    enable_thinking: enableThinking,
-  });
-
-  // Load images if present
-  let loadedImages = null;
-  if (images && images.length > 0) {
-    loadedImages = await Promise.all(
-      images.map((img) => RawImage.fromURL(img))
-    );
-  }
-
-  // Process audio if present
-  let loadedAudio = null;
-  if (audio && audio.length > 0) {
-    loadedAudio = audio;
-  }
-
-  // Run through processor to get model inputs
-  const inputs = await processor(text, loadedImages, loadedAudio);
-
-  let startTime;
-  let numTokens = 0;
-  let tps;
-  let fullOutput = "";
-  let inThinking = false;
-
-  const token_callback_function = () => {
-    startTime ??= performance.now();
-    if (numTokens++ > 0) {
-      tps = (numTokens / (performance.now() - startTime)) * 1000;
+    let loadedAudio = null;
+    if (audio && audio.length > 0) {
+      loadedAudio = audio;
     }
-  };
 
-  const callback_function = (output) => {
-    fullOutput += output;
+    const inputs = await processor(text, loadedImages, loadedAudio);
 
-    if (enableThinking) {
-      if (fullOutput.includes("<|channel>thought\n") && !fullOutput.includes("<channel|>")) {
-        if (!inThinking) {
-          inThinking = true;
-          self.postMessage({ status: "thinking_start" });
+    let startTime;
+    let numTokens = 0;
+    let tps;
+    let fullOutput = "";
+    let inThinking = false;
+
+    const token_callback_function = () => {
+      startTime ??= performance.now();
+      if (numTokens++ > 0) {
+        tps = (numTokens / (performance.now() - startTime)) * 1000;
+      }
+    };
+
+    const callback_function = (output) => {
+      fullOutput += output;
+
+      if (enableThinking) {
+        if (fullOutput.includes("<|channel>thought\n") && !fullOutput.includes("<channel|>")) {
+          if (!inThinking) {
+            inThinking = true;
+            self.postMessage({ status: "thinking_start" });
+          }
+          const thinkStart = fullOutput.indexOf("<|channel>thought\n") + "<|channel>thought\n".length;
+          const thinkText = fullOutput.slice(thinkStart);
+          self.postMessage({ status: "thinking_update", output: thinkText, tps, numTokens });
+          return;
         }
-        const thinkStart = fullOutput.indexOf("<|channel>thought\n") + "<|channel>thought\n".length;
-        const thinkText = fullOutput.slice(thinkStart);
-        self.postMessage({ status: "thinking_update", output: thinkText, tps, numTokens });
-        return;
+        if (inThinking && fullOutput.includes("<channel|>")) {
+          inThinking = false;
+          self.postMessage({ status: "thinking_end" });
+          const afterThink = fullOutput.slice(fullOutput.indexOf("<channel|>") + "<channel|>".length);
+          self.postMessage({ status: "update", output: afterThink, tps, numTokens });
+          return;
+        }
       }
-      if (inThinking && fullOutput.includes("<channel|>")) {
-        inThinking = false;
-        self.postMessage({ status: "thinking_end" });
-        const afterThink = fullOutput.slice(fullOutput.indexOf("<channel|>") + "<channel|>".length);
-        self.postMessage({ status: "update", output: afterThink, tps, numTokens });
-        return;
-      }
+
+      self.postMessage({ status: "update", output, tps, numTokens });
+    };
+
+    const streamer = new TextStreamer(processor.tokenizer, {
+      skip_prompt: true,
+      skip_special_tokens: true,
+      callback_function,
+      token_callback_function,
+    });
+
+    self.postMessage({ status: "start" });
+
+    await model.generate({
+      ...inputs,
+      do_sample: true,
+      temperature: 0.7,
+      top_p: 0.9,
+      max_new_tokens: 2048,
+      streamer,
+      stopping_criteria,
+      return_dict_in_generate: true,
+    });
+
+    self.postMessage({ status: "complete" });
+  } catch (e) {
+    const msg = e.toString();
+    let detail;
+    if (msg.includes("out of memory") || msg.includes("OOM") || msg.includes("allocation")) {
+      detail = "Memória GPU insuficiente. Tente fechar outras abas e reiniciar o navegador.";
+    } else if (msg.includes("device lost") || msg.includes("Device lost")) {
+      detail = "GPU desconectada — o sistema pode ter encerrado o processo por uso de memória. Reinicie o navegador.";
+    } else if (msg.includes("shader") || msg.includes("compilation")) {
+      detail = "Erro na compilação de shaders WebGPU. Verifique se o Chrome está atualizado.";
+    } else {
+      detail = msg;
     }
-
-    self.postMessage({ status: "update", output, tps, numTokens });
-  };
-
-  const streamer = new TextStreamer(processor.tokenizer, {
-    skip_prompt: true,
-    skip_special_tokens: true,
-    callback_function,
-    token_callback_function,
-  });
-
-  self.postMessage({ status: "start" });
-
-  await model.generate({
-    ...inputs,
-    do_sample: true,
-    temperature: 0.7,
-    top_p: 0.9,
-    max_new_tokens: 2048,
-    streamer,
-    stopping_criteria,
-    return_dict_in_generate: true,
-  });
-
-  self.postMessage({ status: "complete" });
+    self.postMessage({ status: "error", data: detail });
+  }
 }
 
 async function check() {
@@ -162,7 +170,22 @@ async function load({ model_id, dtype } = {}) {
     await model.generate({ ...inputs, max_new_tokens: 1 });
     self.postMessage({ status: "ready" });
   } catch (e) {
-    self.postMessage({ status: "error", data: e.toString() });
+    const msg = e.toString();
+    let detail;
+    if (msg.includes("out of memory") || msg.includes("OOM") || msg.includes("allocation")) {
+      detail = "Memória GPU insuficiente para carregar o modelo. Tente fechar outras abas e apps.";
+    } else if (msg.includes("device lost") || msg.includes("Device lost")) {
+      detail = "GPU desconectada durante o carregamento. Reinicie o navegador e tente novamente.";
+    } else if (msg.includes("shader") || msg.includes("compilation")) {
+      detail = "Erro na compilação de shaders. Verifique se o Chrome está atualizado (121+).";
+    } else if (msg.includes("NetworkError") || msg.includes("Failed to fetch") || msg.includes("AbortError")) {
+      detail = "Erro de rede durante o download. Verifique sua conexão e tente novamente.";
+    } else if (msg.includes("QuotaExceededError") || msg.includes("quota")) {
+      detail = "Armazenamento insuficiente no dispositivo. Libere espaço e tente novamente.";
+    } else {
+      detail = msg;
+    }
+    self.postMessage({ status: "error", data: detail });
   }
 }
 

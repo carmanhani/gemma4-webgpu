@@ -246,6 +246,8 @@ function App() {
           break;
         case "error":
           setError(e.data.data);
+          setStatus(null);
+          setIsRunning(false);
           break;
       }
     };
@@ -438,7 +440,17 @@ function App() {
             </div>
 
             {error && (
-              <div className="mt-4 text-dm-red text-sm">{error}</div>
+              <div className="mt-4 max-w-md text-center">
+                <div className="bg-dm-red/10 border border-dm-red/30 rounded-xl px-4 py-3 text-sm text-dm-red">
+                  {error}
+                </div>
+                <button
+                  className="mt-3 text-sm text-dm-blue hover:underline"
+                  onClick={() => setError(null)}
+                >
+                  Tentar novamente
+                </button>
+              </div>
             )}
 
             <button
@@ -448,7 +460,7 @@ function App() {
                 worker.current.postMessage({ type: "load", data: { model_id: model.id, dtype: model.dtype } });
                 setStatus("loading");
               }}
-              disabled={status !== null || error !== null}
+              disabled={status !== null}
             >
               {modelCached ? "Start" : "Download & Start"}
             </button>
