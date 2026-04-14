@@ -22,7 +22,15 @@ class TextGenerationPipeline {
       progress_callback,
     });
 
-    return Promise.all([this.processor, this.model]);
+    const [processor, model] = await Promise.all([this.processor, this.model]);
+
+    // Set chat_template if missing (some ONNX exports omit it)
+    if (!processor.tokenizer.chat_template) {
+      processor.tokenizer.chat_template =
+        "{{- bos_token }}\n{%- for message in messages %}\n{%- if message.role == 'system' %}\n{{- '<start_of_turn>system\n' + message.content + '<end_of_turn>\n' }}\n{%- elif message.role == 'user' %}\n{{- '<start_of_turn>user\n' + message.content + '<end_of_turn>\n' }}\n{%- elif message.role == 'assistant' %}\n{{- '<start_of_turn>model\n' + message.content + '<end_of_turn>\n' }}\n{%- endif %}\n{%- endfor %}\n{%- if add_generation_prompt %}\n{{- '<start_of_turn>model\n' }}\n{%- endif %}";
+    }
+
+    return [processor, model];
   }
 }
 
